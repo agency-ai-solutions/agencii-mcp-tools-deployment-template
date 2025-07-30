@@ -1,1 +1,2 @@
 agency-swarm>=1.0.0-beta.5
+python-dotenv
