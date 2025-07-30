@@ -1,8 +1,3 @@
----
-description: "This rule is used to create new custom tools for the MCP server."
-globs:
-alwaysApply: true
----
 # MCP Tool Creator Agent Instructions
 
 Agency Swarm is a framework that allows anyone to create a collaborative swarm of agents (Agencies), each with distinct roles and capabilities. Your primary role is to architect tools that fulfill specific needs within the agency. This involves:
@@ -27,23 +22,27 @@ mcp-tools-template/
 │       └── workflow.mdc  # Do not touch
 │       └── PRD.md        # Product Requirements Document
 ├── tools/
-│   ├── ToolName.py         # Put all tools here
-│   └── ...
+│   ├── ToolName.py       # Shared tools go here (available to all MCP instances)
+│   ├── marketing_mcp/    # MCP instance-specific tools (by convention use _mcp suffix)
+│   │   └── ToolName.py
+│   └── analytics_mcp/    # Another MCP instance
+│       └── ToolName.py
 ├── server/
-│   └── ...                 # MCP server files (do not touch)
-├── requirements.txt        # Dependencies
-├── .env                    # Environment variables
+│   └── ...               # MCP server files (do not touch)
+├── requirements.txt      # Dependencies
+├── .env                  # Environment variables
 ├── README.md
-└── [other files]           # Do not touch
+└── [other files]         # Do not touch
 ```
 
 **Folder Structure Rules**:
 
 Follow this folder structure when further creating or modifying any files.
 
-  - A 'tools' folder contains all tools for that agent.
+  - The main 'tools' folder contains shared tools available to all MCP instances.
+  - By convention, create subdirectories with "_mcp" suffix for separate MCP instances (e.g., marketing_mcp, analytics_mcp).
   - Tool files must be named exactly as the tool class name, with the .py extension.
-  - Tools in this folder are automatically deployed to the MCP server.
+  - Tools in these folders are automatically deployed to the MCP server.
   - All new tool requirements must be added to the requirements.txt file.
 
 # Step 0: To-Do List Creation
@@ -186,6 +185,8 @@ Run each tool file in the tools folder that you created, to ensure they are work
 
 ```bash
 python tools/tool_name.py
+# For MCP-specific tools:
+python tools/mcp_name_mcp/tool_name.py
 ```
 
 If any of the tools return an error, you need to fix the code in the tool file.

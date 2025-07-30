@@ -49,19 +49,88 @@ const PORT = parseInt(process.env.PORT ?? "8080", 10);
 const PYTHON_SERVER_PORT = parseInt(process.env.PYTHON_SERVER_PORT ?? "8000", 10);
 const app = express();
 /* -------------------------------------------------
- *  Launch Python MCP server for local tools
+ *  Detect and configure MCP instances
  * -------------------------------------------------*/
-const pythonChild = spawn("python", ["server/start_mcp.py"], {
-    stdio: "inherit",
-    env: { ...process.env },
-    cwd: process.cwd()
+// Function to get MCP subdirectories in tools directory
+// By convention, we use folders with "_mcp" suffix, but any folder name can be used
+function getToolsSubdirectories() {
+    const toolsDir = path.resolve(process.cwd(), "tools");
+    if (!fs.existsSync(toolsDir)) {
+        console.warn(`Tools directory not found at ${toolsDir}`);
+        return [];
+    }
+    
+    // In a real production environment, you might want to filter based on your naming convention
+    // Here we're showing an example with "_mcp" suffix, but the code accepts any directory
+    return fs.readdirSync(toolsDir, { withFileTypes: true })
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => dirent.name);
+}
+
+// Get all MCP instances to run
+const mcpInstances = [];
+
+// Check if we should run a specific MCP instance
+const specificToolsDir = process.env.MCP_TOOLS_DIR;
+const specificInstanceName = process.env.MCP_INSTANCE_NAME || "default";
+
+if (specificToolsDir) {
+    // Run only the specified instance
+    mcpInstances.push({
+        name: specificInstanceName,
+        toolsDir: specificToolsDir,
+        port: PYTHON_SERVER_PORT
+    });
+} else {
+    // Default behavior: run the main tools directory
+    mcpInstances.push({
+        name: "default",
+        toolsDir: "./tools",
+        port: PYTHON_SERVER_PORT
+    });
+    
+    // Auto-discover and add MCP instances from subdirectories
+    const subDirs = getToolsSubdirectories();
+    let portOffset = 1;
+    
+    subDirs.forEach(dir => {
+        mcpInstances.push({
+            name: dir,
+            toolsDir: `./tools/${dir}`,
+            port: PYTHON_SERVER_PORT + portOffset
+        });
+        portOffset++;
+    });
+}
+
+/* -------------------------------------------------
+ *  Launch Python MCP servers
+ * -------------------------------------------------*/
+const pythonChildren = mcpInstances.map(instance => {
+    console.log(`Starting MCP instance: ${instance.name} (${instance.toolsDir}) on port ${instance.port}`);
+    
+    const child = spawn("python", ["server/start_mcp.py"], {
+        stdio: "inherit",
+        env: { 
+            ...process.env,
+            MCP_TOOLS_DIR: instance.toolsDir,
+            MCP_INSTANCE_NAME: instance.name,
+            MCP_PORT: instance.port.toString()
+        },
+        cwd: process.cwd()
+    });
+    
+    child.on("exit", code => console.error(`Python MCP server (${instance.name}) exited with code ${code ?? "unknown"}`));
+    child.on("error", err => console.error(`Failed to start Python MCP server (${instance.name}): ${err.message}`));
+    
+    return { child, instance };
 });
-pythonChild.on("exit", code => console.error(`Python MCP server exited with code ${code ?? "unknown"}`));
-pythonChild.on("error", err => console.error(`Failed to start Python MCP server: ${err.message}`));
+
 /* -------------------------------------------------
  *  Track child processes for cleanup
  * -------------------------------------------------*/
-const childProcesses = [pythonChild];
+const childProcesses = pythonChildren.map(pc => pc.child);
+
 /* -------------------------------------------------
  *  Launch Supergateway for each server
  * -------------------------------------------------*/
@@ -96,18 +165,36 @@ servers.forEach((srv, idx) => {
         ws: true
     }));
 });
-app.use(createProxyMiddleware({
-    target: `http://localhost:${PYTHON_SERVER_PORT}`,
-    changeOrigin: true,
-    ws: true,
-    context: (pathname) => pathname.startsWith('/sse')
-}));
-// Proxy /messages to Python server
-app.use(createProxyMiddleware({
-    target: `http://localhost:${PYTHON_SERVER_PORT}`,
-    changeOrigin: true,
-    context: (pathname) => pathname.startsWith('/messages')
-}));
+
+/* -------------------------------------------------
+ *  Set up proxies for MCP instances
+ * -------------------------------------------------*/
+mcpInstances.forEach(instance => {
+    if (instance.name === "default") {
+        // Default instance gets root paths
+        app.use(createProxyMiddleware({
+            target: `http://localhost:${instance.port}`,
+            changeOrigin: true,
+            ws: true,
+            context: (pathname) => pathname.startsWith('/sse')
+        }));
+        
+        app.use(createProxyMiddleware({
+            target: `http://localhost:${instance.port}`,
+            changeOrigin: true,
+            context: (pathname) => pathname.startsWith('/messages')
+        }));
+    } else {
+        // Other instances get prefixed paths
+        app.use(`/${instance.name}`, createProxyMiddleware({
+            target: `http://localhost:${instance.port}`,
+            changeOrigin: true,
+            pathRewrite: p => p.replace(`/${instance.name}`, ""),
+            ws: true
+        }));
+    }
+});
+
 /* -------------------------------------------------
  *  Cleanup on exit
  * -------------------------------------------------*/
@@ -120,6 +207,7 @@ process.on("SIGINT", () => {
     });
     process.exit(0);
 });
+
 process.on("SIGTERM", () => {
     childProcesses.forEach(child => {
         if (child && !child.killed) {
@@ -128,24 +216,52 @@ process.on("SIGTERM", () => {
     });
     process.exit(0);
 });
+
 /* -------------------------------------------------
  *  Info endpoint
  * -------------------------------------------------*/
 app.get("/", (_, res) => res.json({
     status: "ok",
-    localTools: {
-        sse: "/sse",
-        message: "/messages",
-        description: "Python MCP server for local tools"
-    },
+    mcpInstances: mcpInstances.map(instance => {
+        if (instance.name === "default") {
+            return {
+                name: instance.name,
+                sse: "/sse",
+                message: "/messages",
+                description: "Default Python MCP server for local tools",
+                toolsDir: instance.toolsDir
+            };
+        } else {
+            return {
+                name: instance.name,
+                sse: `/${instance.name}/sse`,
+                message: `/${instance.name}/messages`,
+                description: `Python MCP server for ${instance.name} tools`,
+                toolsDir: instance.toolsDir
+            };
+        }
+    }),
     servers: servers.map(s => ({
         name: s.name,
         sse: `/${s.name}/sse`,
         message: `/${s.name}/message`
     }))
 }));
-app.listen(PORT, () => console.log(`✅ Multi-MCP proxy running on :${PORT}\n` +
-    `• Local tools: /sse  |  /messages  (Python server on :${PYTHON_SERVER_PORT})\n` +
-    servers
-        .map(s => `• ${s.name}: /${s.name}/sse  |  /${s.name}/message`)
-        .join("\n")));
+
+app.listen(PORT, () => {
+    console.log(`✅ Multi-MCP proxy running on :${PORT}`);
+    
+    // Log MCP instances
+    mcpInstances.forEach(instance => {
+        if (instance.name === "default") {
+            console.log(`• Default MCP: /sse | /messages (${instance.toolsDir} on port ${instance.port})`);
+        } else {
+            console.log(`• ${instance.name} MCP: /${instance.name}/sse | /${instance.name}/messages (${instance.toolsDir} on port ${instance.port})`);
+        }
+    });
+    
+    // Log other servers
+    servers.forEach(s => {
+        console.log(`• ${s.name}: /${s.name}/sse | /${s.name}/message`);
+    });
+});

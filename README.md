@@ -4,8 +4,9 @@ A template for quickly creating and deploying your own MCP servers. It allows yo
 
 1. Quickly create completely custom MCP server just by chatting with AI IDEs.
 2. Add pre-built open source MCP servers to your project from MCP marketplaces.
+3. Create multiple MCP instances in separate directories with shared tools.
 
-This template deployes all of them at once on railway in just a few clicks! 
+This template deploys all of them at once on railway in just a few clicks! 
 
 ## 🚀 Step-by-Step Guide
 
@@ -89,19 +90,71 @@ You can't connect local servers to Agencii, but you can test them by adding the 
 
 This step is not necessary. As long as there are no issues in your tools,
 
-## Step 3: Deploy to Production
+## Step 3: Using Multiple MCP Instances
+
+This template supports creating multiple MCP instances in separate directories, with shared tools in the main tools directory.
+
+### Directory Structure
+
+By convention, we recommend using the "_mcp" suffix for MCP instance directories, but any directory name can be used:
+
+```
+tools/
+├── SharedTool1.py         # Shared across all MCP instances
+├── SharedTool2.py         # Shared across all MCP instances
+├── marketing_mcp/         # Marketing MCP instance
+│   ├── MarketingTool1.py
+│   └── MarketingTool2.py
+└── analytics_mcp/         # Analytics MCP instance
+    ├── AnalyticsTool1.py
+    └── AnalyticsTool2.py
+```
+
+### Running Specific MCP Instances
+
+To run a specific MCP instance, use the `MCP_TOOLS_DIR` environment variable:
+
+```bash
+# Run the marketing MCP instance
+MCP_TOOLS_DIR="./tools/marketing_mcp" MCP_INSTANCE_NAME="marketing-mcp" npm run start
+
+# Run the analytics MCP instance
+MCP_TOOLS_DIR="./tools/analytics_mcp" MCP_INSTANCE_NAME="analytics-mcp" npm run start
+```
+
+This will load all tools from the specified directory AND all tools from the parent tools directory.
+
+### Configuration Options
+
+The MCP server can be configured using environment variables:
+
+- `MCP_TOOLS_DIR`: Path to the tools directory (default: "./tools")
+- `MCP_HOST`: Host to bind server to (default: "0.0.0.0")
+- `MCP_PORT`: Port to run server on (default: 8000)
+- `MCP_INSTANCE_NAME`: Instance name for logging/identification (default: "mcp-server")
+
+These can also be set as command line arguments:
+
+```bash
+python server/start_mcp.py --tools-dir ./tools/marketing --port 8001 --name marketing-mcp
+```
+
+## Step 4: Deploy to Production
 
 1. Visit [railway.com](https://railway.com).
 2. Create a new project and select Deploy from GitHub.
 3. Connect and select the GitHub repository you created in step 1.
-4. Click Deploy.
+4. Set the required environment variables (e.g., `MCP_TOOLS_DIR`, `MCP_INSTANCE_NAME`).
+5. Click Deploy.
+
+To deploy multiple MCP instances, create multiple services in Railway, each with different environment variables.
 
 In case of issues, you can check logs on railway by clicking on the latest deployment and then clicking on the "Logs" tab.
 
 This template will keep your servers cold, so you are not paying for anything when not using them!
 
 
-## Step 4: Copy Your Railway Deployment URL
+## Step 5: Copy Your Railway Deployment URL
 
 1. Go to Settings > Networking
 2. Click "Generate Domain"
@@ -121,7 +174,7 @@ https://<railway-domain>/notionapi/sse
 https://<railway-domain>/example-mcp-server/sse
 ```
 
-## Step 5: Connect MCP Servers to Agencii
+## Step 6: Connect MCP Servers to Agencii
 
 1. Navigate to [Agencii tools page](https://agencii.ai/tools/). 
 2. Click "New Tool"
