@@ -6,7 +6,7 @@ from agency_swarm.tools import BaseTool
 class DataVisualizationTool(BaseTool):
     """
     A tool for creating data visualizations from analytics data.
-    This tool is specific to the analytics MCP instance.
+    This tool is specific to the analytics_mcp MCP instance.
     """
     data_source: str = Field(
         ..., description="The data source to visualize (e.g., 'sales', 'traffic', 'engagement')"

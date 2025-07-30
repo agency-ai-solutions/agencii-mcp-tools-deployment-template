@@ -5,7 +5,7 @@ from agency_swarm.tools import BaseTool
 class MarketingAnalysisTool(BaseTool):
     """
     A tool for analyzing marketing campaign data and providing insights.
-    This tool is specific to the marketing MCP instance.
+    This tool is specific to the marketing_mcp MCP instance.
     """
     campaign_id: str = Field(
         ..., description="The ID of the marketing campaign to analyze"
