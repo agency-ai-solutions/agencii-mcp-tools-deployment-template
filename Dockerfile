@@ -35,8 +35,8 @@ COPY package.json package-lock.json tsconfig.json ./
 # Install Node.js dependencies (including dev dependencies for build)
 RUN npm ci
 
-# Copy server directory structure
-COPY server/ ./server/
+# Copy all application files
+COPY . .
 
 # Build TypeScript to JavaScript
 RUN npm run build
