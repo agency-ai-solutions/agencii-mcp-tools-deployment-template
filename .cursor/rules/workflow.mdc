@@ -156,6 +156,8 @@ Remember, each tool code snippet you create must be IMMIDIATELY ready to use by 
 - **Use global variables for constants**: If a tool requires a constant global variable, that does not change from use to use, (for example, ad_account_id, pull_request_id, etc.), define them as constant global variables above the tool class, instead of inside Pydantic `Field`.
 - **Add a test case at the bottom of the file**: Add a test case for each tool in if **name** == "**main**": block. It will be used to test the tool later.
 - **4-16 Tools Per Agent**: Each agent should have between 4 and 16 tools. Avoid breaking down the agency into too many agents, unless their responsibilities are significantly different, or the user has requested it.
+- **Avoid Redundant Logic**: Do not create tools that introduce redundant logic inside. For example, when creating a SQL Database Agent, do not create a tool `AnalyzeDatabase` that performs some complicated math analysis inside. Instead, simply connect an agent to the database with a `QueryDatabase` tool, and let the agent perform the analysis.
+- **Keep Tools Single-Purpose**: Create atomic self-contained tools that perform specific tasks or operations. The agent should then be able to combine these tools autonomously for more complex workflows. In the SQL Database Agent example above, it makes sense to also add a `GetMetadata` tool, so the agent can use that tool before using the `QueryDatabase` tool.
 
 ## Shared State
 
