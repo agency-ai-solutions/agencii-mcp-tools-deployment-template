@@ -80,19 +80,23 @@ You can use both npx and uv to run these servers.
 
 Run the following command to test the MCP servers and ensure all of them are running.
 
-This step is not necessary, since if your tools are working, there should be no issues when deploying.
+```bash
+python server/start_mcp.py
+```
+
+For testing with subdirectory endpoints:
 
 ```bash
-npm run start
+python server/start_mcp.py --split-subdirs
 ```
 
 You can't connect local servers to Agencii, but you can test them by adding the SSE URL to Cursor's "MCP Servers" tab.
 
-This step is not necessary. As long as there are no issues in your tools,
+This step is not necessary. As long as there are no issues in your tools.
 
-## Step 3: Using Multiple MCP Instances
+## Step 3: Multi-Endpoint MCP Server
 
-This template supports creating multiple MCP instances in separate directories, with shared tools in the main tools directory.
+This template supports serving multiple tool directories as separate endpoints from a single Python server.
 
 ### Directory Structure
 
@@ -116,24 +120,52 @@ To run a specific MCP instance, use the `MCP_TOOLS_DIR` environment variable:
 
 ```bash
 # Run the marketing MCP instance
-MCP_TOOLS_DIR="./tools/marketing_mcp" MCP_INSTANCE_NAME="marketing-mcp" npm run start
+MCP_TOOLS_DIR="./tools/marketing_mcp" MCP_INSTANCE_NAME="marketing-mcp" python server/start_mcp.py
 
 # Run the analytics MCP instance
-MCP_TOOLS_DIR="./tools/analytics_mcp" MCP_INSTANCE_NAME="analytics-mcp" npm run start
+MCP_TOOLS_DIR="./tools/analytics_mcp" MCP_INSTANCE_NAME="analytics-mcp" python server/start_mcp.py
 ```
 
 This will load all tools from the specified directory AND all tools from the parent tools directory.
 
+
+### Server Modes
+
+**Single Directory Mode (default):**
+```bash
+python server/start_mcp.py
+```
+Only tools from the given directory are served at the root endpoint `/sse`.
+
+**Combined Directories Mode (default):**
+```bash
+python server/start_mcp.py --include-subdir
+```
+All tools found in parent directory, sub-directories and mcp config file will be deployed at the root endpoint `/sse`.
+
+**Multi-Endpoint Mode:**
+```bash
+python server/start_mcp.py --split-subdirs
+```
+Each subdirectory gets its own endpoint:
+- Root tools: `/sse`
+- Marketing tools: `/marketing_mcp/sse`
+- Analytics tools: `/analytics_mcp/sse`
+- MCP config tools: `/example-mcp-server/sse`
+
 ### Configuration Options
 
-The MCP server can be configured using environment variables:
-
-- `MCP_TOOLS_DIR`: Path to the tools directory (default: "./tools")
+- `MCP_TOOLS_DIR`: Path to tools directory (default: "./tools")
 - `MCP_HOST`: Host to bind server to (default: "0.0.0.0")
-- `MCP_PORT`: Port to run server on (default: 8000)
-- `MCP_INSTANCE_NAME`: Instance name for logging/identification (default: "mcp-server")
+- `MCP_PORT`: Port to run server on (default: 8080)
+- `MCP_INSTANCE_NAME`: Instance name for logging (default: "mcp-server")
+- `MCP_CONFIG_PATH`: Path to mcp config file for stdio MCP servers (optional)
+- `MCP_INCLUDE_SUBDIRS`: Include ALL subdirectory tools in root endpoint (default: false)
+- `MCP_SPLIT_SUBDIRS`: Create separate endpoints for subdirectories (default: false)
 
-These can also be set as command line arguments:
+**Important:** When `MCP_INCLUDE_SUBDIRS=true`, all tools from subdirectories are loaded into the root `/sse` endpoint alongside the base tools. This creates a single endpoint with all tools combined.
+
+These can also be set as command line arguments (except for config path):
 
 ```bash
 python server/start_mcp.py --tools-dir ./tools/marketing --port 8001 --name marketing-mcp
@@ -144,7 +176,7 @@ python server/start_mcp.py --tools-dir ./tools/marketing --port 8001 --name mark
 1. Visit [railway.com](https://railway.com).
 2. Create a new project and select Deploy from GitHub.
 3. Connect and select the GitHub repository you created in step 1.
-4. Set the required environment variables (e.g., `MCP_TOOLS_DIR`, `MCP_INSTANCE_NAME`).
+4. Set the required environment variables (see .env.example file). If you're planning to change app's port, make sure to adjust Dockerfile accordingly.
 5. Click Deploy.
 
 To deploy multiple MCP instances, create multiple services in Railway, each with different environment variables.
@@ -158,16 +190,19 @@ This template will keep your servers cold, so you are not paying for anything wh
 
 1. Go to Settings > Networking
 2. Click "Generate Domain"
-3. Select port 8080 if needed
-4. Copy the generated URL.
+3. Copy the generated URL.
 
-**Your MCP tools from the `tools/` folder will be accessible at:**
+**In Single Endpoint Mode (default):**
+- Root tools only: `https://<railway-domain>/sse`
 
-```
-https://<railway-domain>/sse
-```
+**In Single Endpoint Mode with `MCP_INCLUDE_SUBDIRS=true`:**
+- All tools (root + subdirectories): `https://<railway-domain>/sse`
 
-**Other MCP servers from the `mcp.json` file will be accessible at URLs like:**
+**In Multi-Endpoint Mode (with `MCP_SPLIT_SUBDIRS=true`):**
+- Root tools: `https://<railway-domain>/sse`
+- Subdirectory tools: `https://<railway-domain>/<subdir-name>/sse`
+
+**Other MCP servers from the `mcp.json` file will be accessible at:**
 
 ```
 https://<railway-domain>/notionapi/sse

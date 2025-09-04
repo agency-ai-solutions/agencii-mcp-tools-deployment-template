@@ -1,43 +1,26 @@
-# Use Python 3.12 slim image for smaller size
+# Use Python base image
 FROM python:3.12-slim
 
-# Install git and other system dependencies
-RUN apt-get update && \
-    apt-get install -y git && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+# Install Node.js and npm (use LTS version)
+RUN apt-get update && apt-get install -y \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && node --version && npm --version
 
 # Set working directory
 WORKDIR /app
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-
-# Copy Python requirements first for better caching
+# Copy requirements and install Python dependencies
 COPY requirements.txt .
+RUN pip install -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir uv
-
-# Copy all application files
+# Copy the application
 COPY . .
 
-# Create a non-root user for security
-RUN useradd --create-home --shell /bin/bash app && \
-    chown -R app:app /app
-
-# Ensure the .cache/uv directory exists for the app user
-RUN mkdir -p /home/app/.cache/uv && \
-    chown -R app:app /home/app/.cache
-
-# Switch to non-root user
-USER app
-
-# Expose port 8080 (main proxy port)
+# Expose port
 EXPOSE 8080
 
-# Command to run the Python MCP server with split subdirectories
-CMD ["python", "server/start_mcp.py", "--split-subdirs"]
+# Start the server
+CMD ["python", "server/start_mcp.py"]
